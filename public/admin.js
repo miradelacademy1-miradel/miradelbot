@@ -10,7 +10,7 @@ const T = {
 const opt = (a, l = 'name') => a.map(x => `<option value="${x.id}">${e(x[l])}</option>`).join('');
 const gopt = () => G.map(g => `<option value="${g.id}">${e(g.cname)} — ${e(g.name)}</option>`).join('');
 const v = id => $('#' + id).value, today = () => new Date(Date.now() + 5 * 36e5).toISOString().slice(0, 10);
-const hdr = t => `<div class=row><h1>${t}</h1><div class=tools>${themeBtn()}<button class=ibtn onclick=out() aria-label="Chiqish">${ic('out')}</button></div></div>`;
+const hdr = t => `<div class=row><h1>${t}</h1><div class=tools>${refreshBtn()}${themeBtn()}<button class=ibtn onclick=out() aria-label="Chiqish">${ic('out')}</button></div></div>`;
 async function add(u, b) { try { await api(u, 'POST', b); toast('Saqlandi'); go(tab); } catch (x) { toast(x.message); } }
 async function del(u) { if (confirm("O'chirilsinmi?")) { try { await api(u, 'DELETE'); go(tab); } catch (x) { toast(x.message); } } }
 async function pay(id) { await api(`admin/students/${id}/pay`, 'PATCH'); go(tab); }
