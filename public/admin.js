@@ -1,11 +1,11 @@
-const PL = { groups: 'Guruh va kurslar', students: "O'quvchilar", payments: "To'lovlar", attendance: 'Davomat', announcements: "E'lonlar", referrals: 'Referral', reports: "Hisobotlarni ko'rish", report_send: 'Hisobot yuborish' };
-const DEF = { teacher: ['attendance', 'report_send'], manager: ['groups', 'students', 'payments', 'announcements', 'referrals', 'reports'] };
+const PL = { groups: 'Guruh va kurslar', students: "O'quvchilar", payments: "To'lovlar", attendance: 'Davomat', announcements: "E'lonlar", referrals: 'Referral', reports: "Hisobotlarni ko'rish", report_send: 'Hisobot yuborish', homework: 'Uyga vazifani tekshirish' };
+const DEF = { teacher: ['attendance', 'report_send', 'homework'], manager: ['groups', 'students', 'payments', 'announcements', 'referrals', 'reports'] };
 let ME, tab = 'home', C = [], G = [], ST = [], SL = [], editId = null;
 const can = (...p) => p.some(x => ME.perms.includes(x));
 const T = {
   home: ['home', 'Bosh', () => 1], grp: ['book', 'Guruh', () => can('groups')], stu: ['grad', 'Talaba', () => can('students', 'payments')],
   att: ['check', 'Davomat', () => can('attendance')], rep: ['doc', 'Hisobot', () => can('reports', 'report_send')], ann: ['bell', "E'lon", () => can('announcements')],
-  ref: ['gift', 'Referral', () => can('referrals')], staff: ['user', 'Xodim', () => ME.role === 'admin'], mod: ['grid', 'Modul', () => ME.role === 'admin']
+  ref: ['gift', 'Referral', () => can('referrals')], staff: ['user', 'Xodim', () => ME.role === 'admin'], mod: ['grid', 'Modul', () => ME.role === 'admin'], hw: ['camera', 'Vazifa', () => can('homework')]
 };
 const opt = (a, l = 'name') => a.map(x => `<option value="${x.id}">${e(x[l])}</option>`).join('');
 const gopt = () => G.map(g => `<option value="${g.id}">${e(g.cname)} — ${e(g.name)}</option>`).join('');
@@ -44,7 +44,7 @@ const R = {
       : `<div class="card c-teal"><h2>Xush kelibsiz</h2><p>Pastdagi menyudan kerakli bo'limni tanlang.</p></div>`);
   },
   grp: () => `<h1>Kurs va guruhlar</h1><div class=card><input id=cn placeholder="Kurs nomi (Ingliz tili, IT...)"><button class=btn onclick="add('admin/courses',{name:v('cn')})">Kurs qo'shish</button></div>
-${C.map(c => `<div class="card row c-lil"><b>${e(c.name)}</b><button class=x onclick="del('admin/courses/${c.id}')" aria-label="O'chirish">${ic('x')}</button></div>`).join('')}
+${C.map(c => `<div class="card row c-lil"><b>${e(c.name)}</b><label class=chk><input type=checkbox ${c.is_english ? 'checked' : ''} onchange="engT(${c.id},this.checked)"> Ingliz tili</label><button class=x onclick="del('admin/courses/${c.id}')" aria-label="O'chirish">${ic('x')}</button></div>`).join('')}
 <div class=card><select id=gc>${opt(C)}</select><input id=gn placeholder="Guruh nomi"><input id=gs placeholder="Jadval (Du-Chor-Ju 18:00)"><button class=btn onclick="add('admin/groups',{course_id:v('gc'),name:v('gn'),schedule:v('gs')})">Guruh qo'shish</button></div>
 ${G.map(g => `<div class=card><div class=row><div><b>${e(g.name)}</b><div class=muted>${e(g.cname)} · ${e(g.schedule)}</div></div><button class=x onclick="del('admin/groups/${g.id}')" aria-label="O'chirish">${ic('x')}</button></div>
 ${ME.role === 'admin' ? `<select style="margin:10px 0 0" onchange="setT(${g.id},this.value)"><option value="">O'qituvchi biriktirilmagan</option>${ST.filter(t => t.role === 'teacher').map(t => `<option value="${t.id}" ${t.id === g.teacher_id ? 'selected' : ''}>${e(t.full_name)}</option>`).join('')}</select>` : `<div class=muted>${e(g.tname || '')}</div>`}</div>`).join('')}`,
@@ -108,6 +108,69 @@ async function loadVS() {
 }
 async function saveVS() { try { await api('admin/vocab/student/' + v('ms'), 'POST', { custom: $('#mc').checked, level_ids: checked('.sl') }); toast('Saqlandi'); } catch (x) { toast(x.message); } }
 async function saveMod() { try { await api('admin/vocab/group/' + v('mg'), 'POST', { open: $('#mo').checked, level_ids: checked('.lv') }); toast('Saqlandi'); } catch (x) { toast(x.message); } }
+let AU = null;
+const lastSat = () => { const d = new Date(Date.now() + 5 * 36e5), k = (d.getUTCDay() + 1) % 7; return new Date(d - k * 864e5).toISOString().slice(0, 10); };
+const sel = (l, c) => l.map(x => { const [k, t] = x.split(/:(.*)/); return `<option value="${k}" ${k === (c || '') ? 'selected' : ''}>${t || '—'}</option>`; }).join('');
+async function engT(id, on) { try { await api('admin/courses/' + id, 'PATCH', { is_english: on }); toast('Saqlandi'); } catch (x) { toast(x.message); } }
+R.hw = () => `<h1>Uyga vazifalar</h1><div class=card><select id=hg onchange=loadHW()><option value="">Hamma guruhlar</option>${G.filter(g => g.english).map(g => `<option value="${g.id}">${e(g.name)}</option>`).join('')}</select>
+<select id=hu onchange=loadHW()><option value="">Hamma unitlar</option>${UNITS.map((u, i) => `<option value="${i + 1}">Unit ${i + 1}</option>`).join('')}</select>
+<select id=hs onchange=loadHW()><option value=submitted>Tekshirilmaganlar</option><option value="">Hammasi</option><option value=accepted>Qabul qilinganlar</option><option value=redo>Qayta bajarishga</option></select></div><div id=hl></div>`;
+async function loadHW() {
+  try {
+    const L = await api('admin/homework?' + new URLSearchParams({ group_id: v('hg'), unit: v('hu'), status: v('hs') }));
+    $('#hl').innerHTML = L.map(h => `<div class=card data-id="${h.id}"><div class=row><b>${e(h.full_name)}</b><span class="pill ${h.status === 'accepted' ? 'ok' : h.status === 'redo' ? 'bad' : 'sb'}">${HS[h.status]}</span></div><div class=muted>Unit ${h.unit} · ${TASKS[h.task]} · ${h.at}</div>
+${h.has_img ? `<a href="/api/admin/homework/${h.id}/img" target=_blank><img src="/api/admin/homework/${h.id}/img" loading=lazy alt="Vazifa rasmi" style="width:100%;border-radius:20px;margin:10px 0"></a>` : `<p class=muted>Rasm muddati o'tgan.</p>`}
+<input class=hc placeholder="Izoh (ixtiyoriy)" value="${e(h.comment)}"><div class=row><button class="pill ok" onclick="rv(${h.id},'accepted')">${ic('check')} Qabul</button><button class="pill bad" onclick="rv(${h.id},'redo')">Qayta bajarsin</button></div></div>`).join('') || `<p class=muted>Vazifa yo'q.</p>`;
+  } catch (x) { toast(x.message); }
+}
+async function rv(id, s) { try { await api('admin/homework/' + id, 'PATCH', { status: s, comment: document.querySelector(`[data-id="${id}"] .hc`).value }); toast('Saqlandi'); loadHW(); } catch (x) { toast(x.message); } }
+
+// Ingliz tili guruhlari: o'qituvchi dars hisoboti varag'i (qog'oz blankaning raqamli shakli)
+const repOld = R.rep;
+R.rep = async () => {
+  const eg = G.filter(g => g.english), send = can('report_send'), L = eg.length ? await api('admin/reports/audit/list').catch(() => []) : [];
+  const au = eg.length ? `<div class=card><h2>Ingliz tili: hisobot varag'i</h2>${send ? `<select id=ag3>${eg.map(g => `<option value="${g.id}">${e(g.name)}</option>`).join('')}</select><input type=date id=aw value="${lastSat()}"><p class=muted style="margin-bottom:8px">Hafta boshlanishi: shanba sanasi</p><button class=btn onclick=openAudit()>Varaqni ochish</button>` : ''}
+${L.map(x => `<div class=row style="margin-top:10px"><div><b>${e(x.gname)}</b><div class=muted>${x.week} · ${e(x.teacher)}</div></div><button class="pill ${x.accepted ? 'ok' : 'sb'}" onclick="openAudit(${x.group_id},'${x.week}')">${x.accepted ? 'Qabul qilingan' : 'Ochish'}</button></div>`).join('')}<div id=au style="margin-top:14px"></div></div>` : '';
+  return au + await repOld();
+};
+async function openAudit(gid, wk) {
+  gid = gid || v('ag3'); wk = wk || v('aw'); if (!gid || !wk) return toast('Guruh va sanani tanlang');
+  try {
+    const r = await api(`admin/reports/audit?group_id=${gid}&week=${wk}`);
+    AU = { gid, wk, r, ro: !(can('report_send') && (!r.sheet || r.sheet.teacher_id === ME.id)) };
+    $('#au').innerHTML = auForm(AU);
+    if (AU.ro) document.querySelectorAll('#au input,#au select,#au textarea').forEach(x => x.disabled = true);
+    $('#au').scrollIntoView({ behavior: 'smooth' });
+  } catch (x) { toast(x.message); }
+}
+function auForm(A) {
+  const { r, wk } = A, d = (r.sheet && r.sheet.data) || {}, g = r.group, sun = new Date(Date.parse(wk) + 864e5).toISOString().slice(0, 10);
+  const les = (p, nm) => {
+    const L = d[p] || {};
+    return `<div class=card style="background:#ffffff40"><h2>${nm}</h2><div class=row><input type=time id=a_${p}_from value="${L.from || ''}"><input type=time id=a_${p}_to value="${L.to || ''}"></div>
+<div class=row><input id=a_${p}_unit placeholder="Unit №" value="${e(L.unit || '')}" style="max-width:110px"><input id=a_${p}_topic placeholder="Mavzu" value="${e(L.topic || '')}"></div>
+<p class=muted>Classwork (50 ta mashq) bajarildimi?</p><div class=row><select id=a_${p}_cw>${sel(['', "full:To'liq 50/50", 'part:Qisman'], L.cw)}</select><input type=number id=a_${p}_cwn min=0 max=50 placeholder="/50" value="${L.cwn ?? ''}" style="max-width:90px"></div>
+<p class=muted>Controlled Speaking (6 ta qolip) o'tildimi?</p><select id=a_${p}_cs>${sel(['', 'ha:Ha', "yoq:Yo'q"], L.cs)}</select>
+<p class=muted>Homework (50 ta mashq) tushuntirildimi?</p><select id=a_${p}_hw>${sel(['', "ha:Ha, namuna ko'rsatildi", "yoq:Yo'q"], L.hw)}</select>
+<p class=muted>Pre-Int o'quvchi 4 sikl bo'yicha ishladimi?</p>${[['gram', 'Gram'], ['read', 'Read'], ['list', 'List'], ['sw', 'Speak/Write']].map(([k, l]) => `<label class=chk><input type=checkbox class="a_${p}_pi" value="${k}" ${(L.pi || []).includes(k) ? 'checked' : ''}> ${l}</label>`).join('')}</div>`;
+  };
+  const mk = (id, cur) => `<select id="${id}" style="margin:0;padding:10px">${sel(['', '+:+', '-:−', '½:½'], cur)}</select>`;
+  return `<h2>${e(g.name)}${g.schedule ? ' · ' + e(g.schedule) : ''}</h2><p class=muted>Hafta: ${wk} — ${sun} · O'qituvchi: ${e(r.sheet ? r.sheet.teacher : ME.name)}</p>${les('sat', 'Shanba darsi')}${les('sun', 'Yakshanba darsi')}
+<h2>O'quvchilar davomati va uyga vazifa</h2><p class=muted style="margin-bottom:8px">(+) keldi/bajardi · (−) kelmadi/bajarmadi · (½) chala bajardi</p>
+${r.students.map(s => { const w = (d.rows || {})[s.id] || {}; return `<div class=card data-sid="${s.id}" style="padding:14px 16px;background:#ffffff40"><b>${e(s.full_name)}</b><div class=grid style="margin-top:8px"><div><div class=muted>Shanba davomat</div>${mk('sa' + s.id, w.sa ?? s.sat)}</div><div><div class=muted>Shanba vazifa</div>${mk('sh' + s.id, w.sh)}</div><div><div class=muted>Yakshanba davomat</div>${mk('ua' + s.id, w.ua ?? s.sun)}</div><div><div class=muted>Yakshanba vazifa</div>${mk('uh' + s.id, w.uh)}</div></div><div class=muted style="margin-top:8px">O'zlashtirish (1–5 ball)</div><input type=number min=1 max=5 id="sc${s.id}" value="${w.sc ?? ''}" style="margin:0"></div>`; }).join('')}
+<h2>Seshanba kungi nazorat testi uchun tavsiya</h2><p class=muted>O'quvchilar eng ko'p qiynalgan joy (qaysi qoidada xato ko'p bo'ldi?):</p><textarea id=a_hard rows=2>${e(d.hard || '')}</textarea>
+<p class=muted>Uyga vazifani bajarmagan yoki sust qatnashgan o'quvchi(lar) va sababi:</p><textarea id=a_weak rows=2>${e(d.weak || '')}</textarea>
+${r.sheet ? `<p class=muted style="margin:8px 0">Qabul qildi (Koordinator): ${r.sheet.accepted_name ? e(r.sheet.accepted_name) + ' · ' + r.sheet.accepted_at : '—'}</p>` : ''}
+${A.ro ? '' : `<button class=btn onclick=saveAudit()>Hisobotni yuborish</button>`}
+${r.sheet && can('reports') && !r.sheet.accepted_by ? `<button class=btn style="margin-top:8px;background:#fff;color:var(--ink)" onclick="acceptAudit(${r.sheet.id})">Qabul qildim</button>` : ''}`;
+}
+function auData() {
+  const les = p => ({ from: v(`a_${p}_from`), to: v(`a_${p}_to`), unit: v(`a_${p}_unit`), topic: v(`a_${p}_topic`), cw: v(`a_${p}_cw`), cwn: v(`a_${p}_cwn`), cs: v(`a_${p}_cs`), hw: v(`a_${p}_hw`), pi: checked(`.a_${p}_pi`) }), rows = {};
+  document.querySelectorAll('#au [data-sid]').forEach(c => { const i = c.dataset.sid; rows[i] = { sa: v('sa' + i), sh: v('sh' + i), ua: v('ua' + i), uh: v('uh' + i), sc: v('sc' + i) }; });
+  return { sat: les('sat'), sun: les('sun'), rows, hard: v('a_hard'), weak: v('a_weak') };
+}
+async function saveAudit() { try { await api('admin/reports/audit', 'POST', { group_id: AU.gid, week: AU.wk, data: auData() }); toast('Hisobot yuborildi'); go(tab); } catch (x) { toast(x.message); } }
+async function acceptAudit(id) { try { await api(`admin/reports/audit/${id}/accept`, 'PATCH'); toast('Qabul qilindi'); openAudit(AU.gid, AU.wk); } catch (x) { toast(x.message); } }
 async function loadAtt() {
   const r = await api(`admin/attendance?group_id=${v('ag')}&date=${v('ad')}`);
   $('#al').innerHTML = r.map(s => `<div class=card data-id="${s.id}"><b>${e(s.full_name)}</b><div class=seg>${[['keldi', 'Keldi'], ['kelmadi', 'Kelmadi'], ['sababli', 'Sababli']].map(([k, l]) => `<button data-v=${k} class="${s.status === k ? 'on ' + k : ''}" onclick="seg(this)">${l}</button>`).join('')}<input type=number class=sc value="${s.score}" min=0 max=100></div></div>`).join('')
@@ -123,6 +186,6 @@ async function go(t) {
   nav(Object.fromEntries(Object.entries(T).filter(([k, x]) => x[2]()).map(([k, x]) => [k, [x[0], x[1]]])), t, 'go');
   [C, G] = await Promise.all([api('admin/courses').catch(() => []), api('admin/groups').catch(() => [])]);
   if (ME.role === 'admin') ST = await api('admin/staff');
-  try { $('#main').innerHTML = await R[t](); } catch (x) { toast(x.message); }
+  try { $('#main').innerHTML = await R[t](); if (t === 'hw') loadHW(); } catch (x) { toast(x.message); }
 }
 api('me').then(m => { if (m.role === 'student') return location.href = '/student.html'; ME = m; go('home'); }).catch(() => location.href = '/');
