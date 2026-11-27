@@ -1,4 +1,4 @@
-:root{--coral:#F0577A;--teal:#2F7F6F;--mus:#F4B63A;--cream:#FBF7DC;--lil:#9E9AF0;--ink:#1E1E1E}
+:root{--coral:#F0577A;--teal:#2F7F6F;--mus:#F4B63A;--cream:#FBF7DC;--lil:#9E9AF0;--ink:#1E1E1E;--ring:#F4B63A;--ring-bg:#ffffff33}
 *{box-sizing:border-box;margin:0}
 body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:linear-gradient(160deg,#FDE8D3,#FBD9E8) fixed;color:var(--ink);min-height:100vh;padding:20px 16px 120px;max-width:600px;margin:auto}
 h1{font-size:30px;font-weight:800;margin:6px 0 14px;line-height:1.1}h2{font-size:18px;font-weight:800;margin:16px 0 8px}
@@ -23,3 +23,27 @@ input,select,textarea{width:100%;padding:14px 18px;border:0;border-radius:99px;b
 @keyframes f{from{opacity:0;transform:translateY(8px)}}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 :focus-visible{outline:3px solid var(--lil)}
+.tools{display:flex;gap:8px}
+.ibtn{width:44px;height:44px;border-radius:50%;border:0;background:var(--cream);color:inherit;display:inline-grid;place-items:center;cursor:pointer}
+.x{color:inherit;display:grid}.pill svg,.btn svg{width:15px;height:15px;vertical-align:-3px}.btn svg{width:18px;height:18px;margin-right:4px}
+.sb{background:#FFE9A8;color:#6b4e00}
+/* ===== Kumush-qora shisha (glass) mavzusi ===== */
+[data-theme=glass]{--cream:#ffffff14;--ring:#E6E9EE;--ring-bg:#ffffff22;color-scheme:dark}
+[data-theme=glass] body{background:radial-gradient(620px 420px at 90% -5%,#9aa1ae55,transparent 65%),radial-gradient(520px 520px at -10% 65%,#6b7280480,transparent 65%),#0a0b0e;background-attachment:fixed;color:#E8EAEE}
+[data-theme=glass] .card,[data-theme=glass] #nav,[data-theme=glass] .toast,[data-theme=glass] .ibtn{backdrop-filter:blur(22px) saturate(140%);-webkit-backdrop-filter:blur(22px) saturate(140%)}
+[data-theme=glass] .card,[data-theme=glass] .ibtn{background:linear-gradient(145deg,#ffffff1f,#ffffff08);border:1px solid #ffffff26;box-shadow:0 8px 32px #0009,inset 0 1px 0 #ffffff26;color:#E8EAEE}
+[data-theme=glass] .c-teal,[data-theme=glass] .c-lil,[data-theme=glass] .c-ink{background:linear-gradient(145deg,#ffffff2e,#ffffff0d);color:#fff}
+[data-theme=glass] .c-coral{background:linear-gradient(145deg,#ffffff45,#ffffff14);border-color:#ffffff55;color:#fff}
+[data-theme=glass] .c-mus{background:linear-gradient(145deg,#eef0f4,#a4aab6);color:#0b0c0f;border-color:#fff8}
+[data-theme=glass] input,[data-theme=glass] select,[data-theme=glass] textarea{background:#ffffff12;border:1px solid #ffffff26;color:#fff}
+[data-theme=glass] ::placeholder{color:#ffffff80}[data-theme=glass] option{color:#111}
+[data-theme=glass] .btn{background:linear-gradient(145deg,#f1f3f7,#a9afbb);color:#0b0c0f}
+[data-theme=glass] #nav{background:#0d0e12b8;border:1px solid #ffffff26}
+[data-theme=glass] #nav button{color:#ffffff99}
+[data-theme=glass] #nav .on{background:linear-gradient(145deg,#f1f3f7,#a9afbb);color:#0b0c0f}
+[data-theme=glass] .seg button{background:#ffffff14;color:#fff;border:1px solid #ffffff1f}
+[data-theme=glass] .seg .on.keldi{background:#e4e7ee;color:#0b0c0f}[data-theme=glass] .seg .on.kelmadi{background:#3a3e47;color:#ff9aa8}[data-theme=glass] .seg .on.sababli{background:#9aa0ab;color:#0b0c0f}
+[data-theme=glass] .ok{background:#e4e7ee;color:#0b0c0f}[data-theme=glass] .sb{background:#ffffff1f;color:#fff}
+[data-theme=glass] .bad{background:#2a2d34;color:#ff9aa8;border:1px solid #ff9aa855}
+[data-theme=glass] .toast{background:#e8eaee;color:#0b0c0f}
+[data-theme=glass] :focus-visible{outline-color:#E6E9EE}
