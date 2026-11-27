@@ -97,8 +97,16 @@ async function loadMod() {
   const [m, r] = await Promise.all([api('admin/vocab/group/' + g), api('admin/vocab/results?group_id=' + g)]);
   $('#mb').innerHTML = `<label class=chk style="margin:8px 0"><input type=checkbox id=mo ${m.open ? 'checked' : ''}> Modul shu guruh uchun ochiq</label><div style="max-height:320px;overflow:auto;margin-bottom:8px">${VL.map(l => `<label class=chk><input type=checkbox class=lv value="${l.id}" ${m.level_ids.includes(l.id) ? 'checked' : ''}> ${e(l.title)} <span class=muted>(${l.qcount})</span></label>`).join('')}</div>
 <div class=row><button class="pill sb" onclick="document.querySelectorAll('.lv').forEach(c=>c.checked=true)">Hammasi</button><button class="pill sb" onclick="document.querySelectorAll('.lv').forEach(c=>c.checked=false)">Hech biri</button></div><button class=btn style="margin-top:10px" onclick=saveMod()>Saqlash</button>`;
+  $('#mb').insertAdjacentHTML('beforeend', `${VL.length ? '' : "<p class=muted>Darajalar yo'q: avval yuqoridan zaxira faylini bazaga yuklang.</p>"}<h2 style="margin-top:18px">O'quvchi uchun alohida ruxsat</h2><select id=ms onchange=loadVS()><option value="">O'quvchini tanlang</option>${opt(m.students, 'full_name')}</select><div id=mst></div>`);
   $('#mr').innerHTML = `<h2>So'nggi natijalar</h2>` + (r.map(x => `<div class="card row" style="padding:14px 20px;margin-bottom:8px"><div><b>${e(x.full_name)}</b><div class=muted>${e(x.title)} · ${x.taken}</div></div><b>${x.points}</b></div>`).join('') || `<p class=muted>Natija yo'q.</p>`);
 }
+async function loadVS() {
+  const id = v('ms'); if (!id) { $('#mst').innerHTML = ''; return; }
+  const s = await api('admin/vocab/student/' + id);
+  $('#mst').innerHTML = `<label class=chk style="margin-top:8px"><input type=checkbox id=mc ${s.custom ? 'checked' : ''}> Shu o'quvchi uchun alohida darajalar (guruh ro'yxati o'rniga)</label><div style="max-height:260px;overflow:auto;margin:8px 0">${VL.map(l => `<label class=chk><input type=checkbox class=sl value="${l.id}" ${s.level_ids.includes(l.id) ? 'checked' : ''}> ${e(l.title)}</label>`).join('')}</div>
+<div class=row><button class="pill sb" onclick="document.querySelectorAll('.sl').forEach(c=>c.checked=true)">Hammasi</button><button class="pill sb" onclick="document.querySelectorAll('.sl').forEach(c=>c.checked=false)">Hech biri</button></div><button class=btn style="margin-top:10px" onclick=saveVS()>Saqlash</button>`;
+}
+async function saveVS() { try { await api('admin/vocab/student/' + v('ms'), 'POST', { custom: $('#mc').checked, level_ids: checked('.sl') }); toast('Saqlandi'); } catch (x) { toast(x.message); } }
 async function saveMod() { try { await api('admin/vocab/group/' + v('mg'), 'POST', { open: $('#mo').checked, level_ids: checked('.lv') }); toast('Saqlandi'); } catch (x) { toast(x.message); } }
 async function loadAtt() {
   const r = await api(`admin/attendance?group_id=${v('ag')}&date=${v('ad')}`);
