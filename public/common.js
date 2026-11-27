@@ -18,6 +18,7 @@ const IC = {
   edit: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>',
   grid: '<rect x="4" y="4" width="7" height="7" rx="2"/><rect x="13" y="4" width="7" height="7" rx="2"/><rect x="4" y="13" width="7" height="7" rx="2"/><rect x="13" y="13" width="7" height="7" rx="2"/>',
   refresh: '<path d="M20 4v5h-5"/><path d="M4 20v-5h5"/><path d="M5.6 9A8 8 0 0119 8.5M18.4 15A8 8 0 015 15.5"/>',
+  camera: '<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>',
   doc: '<path d="M7 3h7l4 4v14H7z"/><path d="M14 3v4h4M10 12h5M10 16h5"/>'
 };
 const ic = n => `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${IC[n] || ''}</svg>`;
@@ -54,4 +55,8 @@ const refreshBtn = () => `<button class=ibtn onclick="_c.clear();location.reload
 function nav(T, cur, fn) {
   $('#nav').innerHTML = Object.entries(T).map(([k, v]) => `<button id="n${k}" onclick="${fn}('${k}')" class="${k === cur ? 'on' : ''}">${ic(v[0])}<small>${v[1]}</small></button>`).join('');
 }
+// Darslik (Beginner Intensive): 10 ta unit, har birida uyga vazifa 4 ta topshiriqdan iborat
+const UNITS = ['A / An, To be, Have got', 'Plurals, This / That / These / Those', "Can / Can't, Imperatives", 'Present Continuous (+ / −)', 'Present Continuous (?)', 'Present Simple (+)', 'Present Simple (− / ?)', 'Present Simple vs Continuous', 'There is / are, in / on / at', 'Some / Any, How much / many, Was / Were'];
+const TASKS = { A: "Bo'sh joyni to'ldiring (1–20)", B: "Xatoni toping (21–30)", C: 'Gap tuzing (31–40)', D: 'Tarjima (41–50)' };
+const HS = { submitted: 'Tekshirilmoqda', accepted: 'Qabul qilindi', redo: 'Qayta bajaring' };
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js');
