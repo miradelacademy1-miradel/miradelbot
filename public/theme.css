@@ -47,3 +47,6 @@ input,select,textarea{width:100%;padding:14px 18px;border:0;border-radius:99px;b
 [data-theme=glass] .bad{background:#2a2d34;color:#ff9aa8;border:1px solid #ff9aa855}
 [data-theme=glass] .toast{background:#e8eaee;color:#0b0c0f}
 [data-theme=glass] :focus-visible{outline-color:#E6E9EE}
+#nav{overflow-x:auto;scrollbar-width:none}#nav::-webkit-scrollbar{display:none}#nav button{flex:1 0 auto}
+.chk{display:flex;align-items:center;gap:8px;padding:5px 0;font-size:14px}.chk input{width:auto;margin:0}
+textarea{border-radius:24px}
