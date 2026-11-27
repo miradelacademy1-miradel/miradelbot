@@ -4,7 +4,7 @@
 <input id=pw type=password placeholder="Parol" autocomplete=current-password>
 <button class=btn id=go>Kirish</button></div>
 <script src=/common.js></script><script>
-api('me').then(d=>location.href=d.role==='admin'?'/admin.html':'/student.html').catch(()=>{});
-$('#go').onclick=async()=>{try{const d=await api('login','POST',{phone:$('#ph').value,password:$('#pw').value});location.href=d.role==='admin'?'/admin.html':'/student.html'}catch(x){toast(x.message)}};
+api('me').then(d=>location.href=d.role==='student'?'/student.html':'/admin.html').catch(()=>{});
+$('#go').onclick=async()=>{try{const d=await api('login','POST',{phone:$('#ph').value,password:$('#pw').value});location.href=d.role==='student'?'/student.html':'/admin.html'}catch(x){toast(x.message)}};
 $('#pw').onkeydown=ev=>{if(ev.key==='Enter')$('#go').click()};
 </script></body></html>
