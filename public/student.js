@@ -1,4 +1,4 @@
-const T = { home: ['home', 'Bosh'], top: ['trophy', 'Reyting'], news: ['bell', 'Yangilik'], ref: ['gift', "Do'stlar"] };
+const T = { home: ['home', 'Bosh'], top: ['trophy', 'Reyting'], mod: ['grid', 'Modul'], news: ['bell', 'Yangilik'], ref: ['gift', "Do'stlar"] };
 let D;
 const R = {
   home: () => {
@@ -18,6 +18,11 @@ const R = {
   news: () => `<h1>Yangiliklar</h1>${D.news.map((n, i) => `<div class="card ${['c-lil', '', 'c-teal'][i % 3]}"><span class="pill ${i % 3 === 1 ? 'ok' : ''}" style="background:#ffffff40">${ic(n.kind === 'vazifa' ? 'doc' : 'bell')} ${n.kind === 'vazifa' ? 'Uyga vazifa' : 'Yangilik'}</span><h2>${e(n.title)}</h2><p>${e(n.body)}</p><div class=muted style="color:inherit">${n.d}</div></div>`).join('') || '<p class=muted>Hozircha e\'lon yo\'q.</p>'}`,
   ref: () => `<h1>Do'stlarni taklif qiling</h1><div class="card c-coral"><div class=muted style="color:#fff">Sizning promo-kodingiz</div><div class=big style="font-size:44px;letter-spacing:2px">${D.me.promo_code}</div><div style="margin:12px 0">Taklif qilgan do'stlar: <b>${D.friends}</b></div>
 <button class=btn onclick=copy()>${ic('copy')} Nusxalash</button><button class=btn style="margin-top:8px;background:#fff;color:var(--ink)" onclick=share()>${ic('share')} Ulashish</button></div>`
+};
+R.mod = async () => {
+  let m; try { m = await api('student/vocab/manifest'); } catch { try { m = JSON.parse(localStorage.getItem('lg_man')); } catch { } }
+  const on = m && m.open;
+  return `<h1>Modullar</h1><div class="card ${on ? 'c-teal' : ''}"><h2>Lug'at testi</h2><p class=muted style="color:inherit">${on ? m.levels.length + " ta daraja ochiq" : "Hozircha yopiq. O'qituvchingiz ochganda shu yerda ko'rinadi."}</p>${on ? `<a class=btn style="display:block;text-align:center;text-decoration:none;margin-top:12px" href="/modules/lugat.html">Ochish</a>` : ''}</div>`;
 };
 const msg = () => `Miradel Academy'da o'qishni boshlang! Ro'yxatdan o'tishda mening promo-kodimni ayting: ${D.me.promo_code}`;
 async function copy() { try { await navigator.clipboard.writeText(D.me.promo_code); toast('Nusxalandi'); } catch { toast(D.me.promo_code); } }
