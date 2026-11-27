@@ -11,7 +11,7 @@ const auth = role => (req, res, next) => {
   catch { res.status(401).json({ error: 'Kirish talab qilinadi' }); }
 };
 app.set('trust proxy', 1);
-app.use(express.json(), cp(), express.static(path.join(__dirname, 'public')));
+app.use(express.json({ limit: '12mb' }), cp(), express.static(path.join(__dirname, 'public')));
 
 async function init() {
   await q(`CREATE TABLE IF NOT EXISTS users(id SERIAL PRIMARY KEY, role TEXT NOT NULL, full_name TEXT NOT NULL, phone TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, promo_code TEXT UNIQUE, referred_by INT REFERENCES users(id) ON DELETE SET NULL, created_at TIMESTAMPTZ DEFAULT now());
@@ -24,6 +24,10 @@ CREATE TABLE IF NOT EXISTS announcements(id SERIAL PRIMARY KEY, title TEXT NOT N
 ALTER TABLE users ADD COLUMN IF NOT EXISTS bonus_paid BOOLEAN DEFAULT false;
 ALTER TABLE study_groups ADD COLUMN IF NOT EXISTS teacher_id INT REFERENCES users(id) ON DELETE SET NULL;
 CREATE TABLE IF NOT EXISTS lesson_reports(id SERIAL PRIMARY KEY, teacher_id INT REFERENCES users(id) ON DELETE CASCADE, group_id INT REFERENCES study_groups(id) ON DELETE CASCADE, day DATE NOT NULL, topic TEXT NOT NULL, homework TEXT, note TEXT, seen BOOLEAN DEFAULT false, created_at TIMESTAMPTZ DEFAULT now());`);
+  await q(`CREATE TABLE IF NOT EXISTS vocab_levels(id TEXT PRIMARY KEY, title TEXT NOT NULL, difficulty TEXT, sort INT DEFAULT 0, qcount INT DEFAULT 0, ver INT DEFAULT 1, data JSONB NOT NULL);
+CREATE TABLE IF NOT EXISTS group_modules(group_id INT REFERENCES study_groups(id) ON DELETE CASCADE, module TEXT, is_open BOOLEAN DEFAULT false, PRIMARY KEY(group_id, module));
+CREATE TABLE IF NOT EXISTS group_levels(group_id INT REFERENCES study_groups(id) ON DELETE CASCADE, level_id TEXT REFERENCES vocab_levels(id) ON DELETE CASCADE, PRIMARY KEY(group_id, level_id));
+CREATE TABLE IF NOT EXISTS vocab_results(id SERIAL PRIMARY KEY, student_id INT REFERENCES users(id) ON DELETE CASCADE, level_id TEXT REFERENCES vocab_levels(id) ON DELETE CASCADE, points INT, correct INT, total INT, seconds INT, taken_at TIMESTAMPTZ DEFAULT now());`);
   const ph = process.env.ADMIN_PHONE, pw = process.env.ADMIN_PASSWORD;
   if (ph && pw && !(await q("SELECT 1 FROM users WHERE role='admin'")).length)
     await q("INSERT INTO users(role,full_name,phone,password_hash) VALUES('admin','Administrator',$1,$2)", [ph.replace(/\s/g, ''), bcrypt.hashSync(pw, 10)]);
@@ -237,6 +241,70 @@ app.get('/api/student/leaderboard', S, w(async (req, res) => {
     LEFT JOIN attendance a ON a.student_id=u.id WHERE s.group_id=(SELECT group_id FROM students WHERE user_id=$1)
     GROUP BY u.id ORDER BY score DESC, u.full_name LIMIT 20`, [req.u.id]);
   res.json(rows.map((r, i) => ({ rank: i + 1, full_name: r.full_name, score: r.score, is_me: r.id === req.u.id })));
+}));
+
+// ---- Modullar: lug'at testi (boshqaruv faqat adminda; natijalar o'quvchi qurilmasidan keladi)
+app.post('/api/admin/vocab/import', A, adminOnly, w(async (req, res) => {
+  const tasks = (req.body.tasks || []).filter(t => t && t.id && t.title && t.quiz && Array.isArray(t.quiz.questions));
+  let i = 0;
+  for (const t of tasks) {
+    const qs = t.quiz.questions.filter(x => x && x.q && Array.isArray(x.options) && x.options.length > 1 && x.options[x.correct] !== undefined)
+      .map(x => ({ q: String(x.q), options: x.options.map(String), correct: x.correct }));
+    if (!qs.length) continue;
+    const data = JSON.stringify({ questions: qs, timePerQ: +t.quiz.timePerQ || 5, nextDelay: +t.quiz.nextDelay || 2 });
+    await q(`INSERT INTO vocab_levels(id,title,difficulty,sort,qcount,data) VALUES($1,$2,$3,$4,$5,$6::jsonb)
+      ON CONFLICT(id) DO UPDATE SET title=$2, difficulty=$3, sort=$4, qcount=$5,
+      ver = CASE WHEN vocab_levels.data = $6::jsonb THEN vocab_levels.ver ELSE vocab_levels.ver + 1 END, data=$6::jsonb`,
+      [String(t.id), String(t.title), t.difficulty || '', i++, qs.length, data]);
+  }
+  if (!i) return res.status(400).json({ error: "Faylda lug'at darajalari topilmadi" });
+  res.json({ ok: 1, count: i });
+}));
+app.get('/api/admin/vocab/levels', A, adminOnly, w(async (req, res) => res.json(await q('SELECT id, title, difficulty, qcount FROM vocab_levels ORDER BY sort, title'))));
+app.get('/api/admin/vocab/group/:gid', A, adminOnly, w(async (req, res) => {
+  const [m] = await q("SELECT is_open FROM group_modules WHERE group_id=$1 AND module='lugat'", [req.params.gid]);
+  const l = await q('SELECT level_id FROM group_levels WHERE group_id=$1', [req.params.gid]);
+  res.json({ open: !!(m && m.is_open), level_ids: l.map(x => x.level_id) });
+}));
+app.post('/api/admin/vocab/group/:gid', A, adminOnly, w(async (req, res) => {
+  const g = req.params.gid, { open, level_ids } = req.body;
+  await q("INSERT INTO group_modules(group_id,module,is_open) VALUES($1,'lugat',$2) ON CONFLICT(group_id,module) DO UPDATE SET is_open=$2", [g, !!open]);
+  await q('DELETE FROM group_levels WHERE group_id=$1', [g]);
+  if ((level_ids || []).length) await q('INSERT INTO group_levels(group_id,level_id) SELECT $1, id FROM vocab_levels WHERE id = ANY($2::text[])', [g, level_ids]);
+  res.json({ ok: 1 });
+}));
+app.get('/api/admin/vocab/results', A, adminOnly, w(async (req, res) => res.json(await q(`SELECT u.full_name, l.title, r.points, to_char(r.taken_at,'YYYY-MM-DD HH24:MI') AS taken
+  FROM vocab_results r JOIN users u ON u.id=r.student_id JOIN vocab_levels l ON l.id=r.level_id JOIN students s ON s.user_id=u.id
+  WHERE ($1::int IS NULL OR s.group_id=$1) ORDER BY r.taken_at DESC LIMIT 100`, [req.query.group_id || null]))));
+
+const myGroup = async id => ((await q('SELECT group_id FROM students WHERE user_id=$1', [id]))[0] || {}).group_id;
+const vocabOpen = async g => !!g && (await q("SELECT 1 FROM group_modules WHERE group_id=$1 AND module='lugat' AND is_open", [g])).length > 0;
+app.get('/api/student/vocab/manifest', S, w(async (req, res) => {
+  const g = await myGroup(req.u.id);
+  if (!(await vocabOpen(g))) return res.json({ open: false, levels: [] });
+  const levels = await q(`SELECT l.id, l.title, l.difficulty, l.qcount, l.ver,
+    (SELECT max(points) FROM vocab_results r WHERE r.student_id=$2 AND r.level_id=l.id) best
+    FROM group_levels gl JOIN vocab_levels l ON l.id=gl.level_id WHERE gl.group_id=$1 ORDER BY l.sort`, [g, req.u.id]);
+  res.json({ open: true, levels });
+}));
+app.get('/api/student/vocab/level/:id', S, w(async (req, res) => {
+  const g = await myGroup(req.u.id);
+  const [l] = (await vocabOpen(g)) ? await q('SELECT l.data FROM group_levels gl JOIN vocab_levels l ON l.id=gl.level_id WHERE gl.group_id=$1 AND l.id=$2', [g, req.params.id]) : [];
+  if (!l) return res.status(403).json({ error: 'Bu daraja sizga ochilmagan' });
+  res.set('Cache-Control', 'private, max-age=31536000, immutable'); res.json(l.data);
+}));
+app.post('/api/student/vocab/results', S, w(async (req, res) => {
+  const g = await myGroup(req.u.id);
+  if (!(await vocabOpen(g))) return res.status(403).json({ error: 'Modul yopiq' });
+  let n = 0;
+  for (const it of (req.body.items || []).slice(0, 50)) {
+    const [l] = await q('SELECT l.qcount FROM group_levels gl JOIN vocab_levels l ON l.id=gl.level_id WHERE gl.group_id=$1 AND l.id=$2', [g, it.level_id]);
+    if (!l) continue;
+    const total = l.qcount, correct = Math.min(Math.max(parseInt(it.correct) || 0, 0), total), d = new Date(it.taken_at);
+    await q('INSERT INTO vocab_results(student_id,level_id,points,correct,total,seconds,taken_at) VALUES($1,$2,$3,$4,$5,$6,$7)',
+      [req.u.id, it.level_id, Math.round(100 * correct / total), correct, total, Math.max(0, parseInt(it.seconds) || 0), isNaN(d) ? new Date() : d]); n++;
+  }
+  res.json({ ok: 1, saved: n });
 }));
 
 const PORT = process.env.PORT || 3000;
