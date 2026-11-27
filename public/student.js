@@ -24,8 +24,37 @@ R.mod = async () => {
   const on = m && m.open;
   return `<h1>Modullar</h1><div class="card ${on ? 'c-teal' : ''}"><h2>Lug'at testi</h2><p class=muted style="color:inherit">${on ? m.levels.length + " ta daraja ochiq" : "Hozircha yopiq. O'qituvchingiz ochganda shu yerda ko'rinadi."}</p>${on ? `<a class=btn style="display:block;text-align:center;text-decoration:none;margin-top:12px" href="/modules/lugat.html">Ochish</a>` : ''}</div>`;
 };
+let bu = null;
+R.book = async () => {
+  const h = await api('student/homework'), m = {}; h.forEach(x => m[x.unit + x.task] = x);
+  if (bu === null) return `<h1>Darslik</h1><p class=muted style="margin-bottom:12px">Uyga vazifani kitobdan daftaringizga bajaring, rasmga olib shu yerga yuklang. Har bir topshiriq alohida yuklanadi.</p>` + UNITS.map((u, i) => {
+    const t = 'ABCD'.split(''), n = t.filter(k => m[(i + 1) + k]).length, ok = t.filter(k => (m[(i + 1) + k] || {}).status === 'accepted').length;
+    return `<button class="card row" style="width:100%;border:0;text-align:left;font:inherit;color:inherit;cursor:pointer" onclick="openU(${i + 1})"><div><b>Unit ${i + 1}</b><div class=muted style="color:inherit">${e(u)}</div></div><span class="pill ${ok === 4 ? 'ok' : 'sb'}">${n}/4 yuborilgan</span></button>`;
+  }).join('');
+  return `<div class=row><h1>Unit ${bu}</h1><button class="pill sb" onclick="openU(null)">Orqaga</button></div><p class=muted style="margin-bottom:10px">${e(UNITS[bu - 1])}</p>` + 'ABCD'.split('').map(t => {
+    const x = m[bu + t], cls = !x ? 'sb' : x.status === 'accepted' ? 'ok' : x.status === 'redo' ? 'bad' : 'sb';
+    return `<div class=card><div class=row><b>${t}. ${TASKS[t]}</b><span class="pill ${cls}">${x ? HS[x.status] : 'Yuklanmagan'}</span></div>${x && x.comment ? `<p class=muted style="color:inherit;margin-top:6px">${e(x.comment)}</p>` : ''}${x && x.status === 'accepted' ? '' : `<button class=btn style="margin-top:10px" onclick="pick(${bu},'${t}')">${ic('camera')} ${x ? 'Qayta yuklash' : 'Rasm yuklash'}</button>`}</div>`;
+  }).join('');
+};
+function openU(n) { bu = n; go('book'); }
+function pick(u, t) { const i = document.createElement('input'); i.type = 'file'; i.accept = 'image/*'; i.onchange = () => upload(u, t, i.files[0]); i.click(); }
+async function shrink(f) {
+  const bm = await createImageBitmap(f), k = Math.min(1, 1280 / Math.max(bm.width, bm.height)), c = document.createElement('canvas');
+  c.width = Math.round(bm.width * k); c.height = Math.round(bm.height * k); c.getContext('2d').drawImage(bm, 0, 0, c.width, c.height);
+  return new Promise(r => c.toBlob(r, 'image/jpeg', .7));
+}
+async function upload(u, t, f) {
+  if (!f) return;
+  try {
+    toast('Yuklanmoqda...');
+    const r = await fetch(`/api/student/homework/${u}/${t}`, { method: 'POST', headers: { 'Content-Type': 'image/jpeg' }, body: await shrink(f) });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(r.status === 413 ? 'Rasm juda katta' : d.error || 'Xatolik');
+    _c.clear(); toast('Yuborildi'); go('book');
+  } catch (x) { toast(x.message === 'Failed to fetch' ? "Internet yo'q" : x.message); }
+}
 const msg = () => `Miradel Academy'da o'qishni boshlang! Ro'yxatdan o'tishda mening promo-kodimni ayting: ${D.me.promo_code}`;
 async function copy() { try { await navigator.clipboard.writeText(D.me.promo_code); toast('Nusxalandi'); } catch { toast(D.me.promo_code); } }
 async function share() { if (navigator.share) { try { await navigator.share({ text: msg() }); } catch { } } else { await navigator.clipboard.writeText(msg()); toast('Matn nusxalandi'); } }
 async function go(t) { nav(T, t, 'go'); $('#main').innerHTML = await R[t](); }
-api('student/home').then(d => { D = d; go('home'); }).catch(x => toast(x.message));
+api('student/home').then(d => { D = d; if (d.me.english) T.book = ['book', 'Darslik']; go('home'); }).catch(x => toast(x.message));
