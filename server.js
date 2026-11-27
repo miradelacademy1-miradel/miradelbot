@@ -114,7 +114,7 @@ app.get('/api/student/home', S, w(async (req, res) => {
   const [me] = await q(`SELECT u.full_name, u.promo_code, s.group_id, g.name gname, s.monthly_fee,
     (NOT s.paid OR s.next_payment<CURRENT_DATE) debt, to_char(s.next_payment,'YYYY-MM-DD') next_payment
     FROM users u JOIN students s ON s.user_id=u.id LEFT JOIN study_groups g ON g.id=s.group_id WHERE u.id=$1`, [id]);
-  const att = await q("SELECT to_char(day,'YYYY-MM-DD') day, status, score FROM attendance WHERE student_id=$1 ORDER BY day DESC LIMIT 90", [id]);
+  const att = await q("SELECT to_char(day,'YYYY-MM-DD') AS day, status, score FROM attendance WHERE student_id=$1 ORDER BY day DESC LIMIT 90", [id]);
   const [{ c }] = await q('SELECT count(*)::int c FROM users WHERE referred_by=$1', [id]);
   const news = await q("SELECT title, body, kind, to_char(created_at,'YYYY-MM-DD') d FROM announcements WHERE group_id IS NULL OR group_id=$1 ORDER BY created_at DESC LIMIT 30", [me.group_id]);
   res.json({ me, att, friends: c, news });
