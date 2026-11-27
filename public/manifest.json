@@ -1,0 +1,10 @@
+{
+  "name": "Miradel Academy",
+  "short_name": "Miradel",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FDE8D3",
+  "theme_color": "#2F7F6F",
+  "lang": "uz",
+  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}
