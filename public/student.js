@@ -4,7 +4,7 @@ const R = {
   home: () => {
     const a = D.att, m = D.me, k = a.filter(x => x.status === 'keldi').length, p = a.length ? Math.round(k * 100 / a.length) : 0, sc = a.reduce((s, x) => s + x.score, 0);
     const st = { keldi: 'Keldi', kelmadi: 'Kelmadi', sababli: 'Sababli' };
-    return `<div class=row><h1>Salom, ${e(m.full_name.split(' ')[0])}</h1><div class=tools>${themeBtn()}<button class=ibtn onclick=out() aria-label="Chiqish">${ic('out')}</button></div></div>
+    return `<div class=row><h1>Salom, ${e(m.full_name.split(' ')[0])}</h1><div class=tools>${refreshBtn()}${themeBtn()}<button class=ibtn onclick=out() aria-label="Chiqish">${ic('out')}</button></div></div>
 <div class="card c-teal row"><div><div class=muted style="color:#fff">Davomat</div><div class=big>${p}%</div><div class=muted style="color:#fff">${e(m.gname || 'Guruhsiz')}</div></div>
 <svg width=120 height=120 viewBox="0 0 120 120"><circle cx=60 cy=60 r=52 fill=none style="stroke:var(--ring-bg)" stroke-width=14 /><circle cx=60 cy=60 r=52 fill=none style="stroke:var(--ring)" stroke-width=14 stroke-linecap=round stroke-dasharray="${p * 3.267} 327" transform="rotate(-90 60 60)"/></svg></div>
 <div class=grid><div class="card c-mus"><div class=muted>Ball</div><div class=big style="font-size:46px">${sc}</div></div><div class="card c-lil"><div class=muted style="color:#fff">Darslar</div><div class=big style="font-size:46px">${a.length}</div></div></div>
