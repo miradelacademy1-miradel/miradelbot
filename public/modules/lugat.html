@@ -1,0 +1,49 @@
+<!doctype html><html lang=uz><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name=theme-color content="#2F7F6F"><link rel=manifest href=/manifest.json><link rel=icon href=/icon.svg><link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel=stylesheet><link rel=stylesheet href=/theme.css><title>Lug'at testi</title>
+<style>.opt{display:block;width:100%;text-align:left;padding:15px 20px;margin-bottom:8px;border:0;border-radius:99px;background:#fff;color:var(--ink);font:inherit;font-weight:600;cursor:pointer}
+.opt.ok{background:#CFEBDD}.opt.no{background:#FFD3DC}.tm{height:8px;border-radius:9px;background:#00000018;overflow:hidden;margin:10px 0}.tm i{display:block;height:100%;background:var(--teal);width:100%}
+[data-theme=glass] .opt{background:#ffffff14;color:#fff;border:1px solid #ffffff26}[data-theme=glass] .opt.ok{background:#e4e7ee;color:#0b0c0f}[data-theme=glass] .opt.no{background:#3a3e47;color:#ff9aa8}[data-theme=glass] .tm{background:#ffffff22}[data-theme=glass] .tm i{background:#E6E9EE}</style></head>
+<body><main id=app></main><script src=/common.js></script><script>
+const LS=(k,v)=>{try{return v===undefined?JSON.parse(localStorage.getItem(k)):localStorage.setItem(k,JSON.stringify(v))}catch{return null}};
+const sh=a=>{a=[...a];for(let i=a.length-1;i>0;i--){const j=Math.random()*(i+1)|0;[a[i],a[j]]=[a[j],a[i]]}return a};
+const url=l=>'/api/student/vocab/level/'+l.id+'?v='+l.ver;
+const back='<a class=pill style="background:#ffffff55;text-decoration:none;color:inherit" href=/student.html>Orqaga</a>';
+let M,S,T1,T2,have=new Set();
+async function getLevel(l){const c=await caches.open('lugat-data'),u=url(l);let r=await c.match(u);if(!r){r=await fetch(u);if(!r.ok)throw new Error('yuklanmadi');await c.put(u,r.clone())}return r.json()}
+async function boot(){
+  clearTimeout(T1);clearTimeout(T2);
+  try{M=await api('student/vocab/manifest');LS('lg_man',M)}catch{M=LS('lg_man')}
+  if(!M||!M.open){$('#app').innerHTML='<div class=card><h1>Lug\'at testi</h1><p>Bu modul guruhingiz uchun yopiq.</p>'+back+'</div>';return}
+  await list();prefetch();sync()}
+async function list(){
+  const c=await caches.open('lugat-data');have=new Set();for(const l of M.levels)if(await c.match(url(l)))have.add(l.id);
+  const keep=new Set(M.levels.map(url));for(const k of await c.keys()){const u=new URL(k.url);if(!keep.has(u.pathname+u.search))c.delete(k)}
+  $('#app').innerHTML='<div class=row><h1>Lug\'at testi</h1>'+back+'</div><p class=muted id=pg style="margin-bottom:10px"></p>'+M.levels.map(l=>'<div class="card row"><div><b>'+e(l.title)+'</b><div class=muted>'+l.qcount+' ta savol · eng yaxshi: '+(l.best??'—')+'</div></div><button class="pill '+(have.has(l.id)?'ok':'sb')+'" onclick="start(\''+l.id+'\')">'+(have.has(l.id)?'Boshlash':'Yuklash')+'</button></div>').join('')}
+async function prefetch(){
+  const todo=M.levels.filter(l=>!have.has(l.id));let n=0;
+  for(const l of todo){try{await getLevel(l);n++;if($('#pg'))$('#pg').textContent='Qurilmaga yuklanmoqda: '+n+'/'+todo.length}catch{break}}
+  if(n){await list();$('#pg').textContent=n===todo.length?"Darajalar qurilmaga yuklandi — internetsiz ham ishlaydi":''}}
+async function start(id){
+  const l=M.levels.find(x=>x.id===id);let d;
+  try{d=await getLevel(l)}catch{return toast("Daraja yuklanmadi. Internetni tekshiring")}
+  const Q=sh(d.questions.map(q=>{const ix=sh(q.options.map((o,i)=>i));return{q:q.q,o:ix.map(i=>q.options[i]),c:ix.indexOf(q.correct)}}));
+  S={l,d,Q,i:0,ok:0,t0:Date.now()};ask()}
+function ask(){
+  const x=S.Q[S.i],tp=S.d.timePerQ||5;
+  $('#app').innerHTML='<div class=row><span class=muted>'+(S.i+1)+'/'+S.Q.length+' · '+S.ok+' to\'g\'ri</span><button class="pill bad" onclick=boot()>To\'xtatish</button></div><div class=tm><i id=bar></i></div><div class=card style="margin-top:12px"><h2 style="font-size:22px;margin:0">'+e(x.q)+'</h2></div>'+x.o.map((o,i)=>'<button class=opt onclick="ans('+i+')">'+e(o)+'</button>').join('');
+  const b=$('#bar');b.style.transition='none';b.style.width='100%';b.offsetWidth;b.style.transition='width '+tp+'s linear';b.style.width='0';
+  S.done=false;T1=setTimeout(()=>ans(-1),tp*1000)}
+function ans(k){
+  if(S.done)return;S.done=true;clearTimeout(T1);const x=S.Q[S.i];if(k===x.c)S.ok++;
+  document.querySelectorAll('.opt').forEach((b,i)=>{b.disabled=true;if(i===x.c)b.classList.add('ok');else if(i===k)b.classList.add('no')});
+  T2=setTimeout(()=>{S.i++;S.i<S.Q.length?ask():finish()},Math.min(S.d.nextDelay||1,2)*750)}
+function finish(){
+  const total=S.Q.length,pts=Math.round(100*S.ok/total),sec=Math.round((Date.now()-S.t0)/1000),l=S.l;
+  const q=LS('lg_q')||[];q.push({level_id:l.id,correct:S.ok,total,seconds:sec,taken_at:new Date().toISOString()});LS('lg_q',q);
+  l.best=Math.max(l.best||0,pts);LS('lg_man',M);
+  $('#app').innerHTML='<div class="card c-teal" style="text-align:center"><div class=muted style="color:#fff">'+e(l.title)+'</div><div class=big>'+pts+'</div><p>'+S.ok+'/'+total+' to\'g\'ri · '+sec+' soniya</p></div><button class=btn onclick="start(\''+l.id+'\')">Qayta topshirish</button><button class=btn style="margin-top:8px;background:#fff;color:var(--ink)" onclick=boot()>Ro\'yxatga qaytish</button>';
+  sync()}
+async function sync(){
+  const q=LS('lg_q')||[];if(!q.length||!navigator.onLine)return;
+  try{await api('student/vocab/results','POST',{items:q});LS('lg_q',(LS('lg_q')||[]).slice(q.length))}catch{}}
+addEventListener('online',sync);boot();
+</script></body></html>
