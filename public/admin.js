@@ -5,7 +5,7 @@ const can = (...p) => p.some(x => ME.perms.includes(x));
 const T = {
   home: ['home', 'Bosh', () => 1], grp: ['book', 'Guruh', () => can('groups')], stu: ['grad', 'Talaba', () => can('students', 'payments')],
   att: ['check', 'Davomat', () => can('attendance')], rep: ['doc', 'Hisobot', () => can('reports', 'report_send')], ann: ['bell', "E'lon", () => can('announcements')],
-  ref: ['gift', 'Referral', () => can('referrals')], staff: ['user', 'Xodim', () => ME.role === 'admin']
+  ref: ['gift', 'Referral', () => can('referrals')], staff: ['user', 'Xodim', () => ME.role === 'admin'], mod: ['grid', 'Modul', () => ME.role === 'admin']
 };
 const opt = (a, l = 'name') => a.map(x => `<option value="${x.id}">${e(x[l])}</option>`).join('');
 const gopt = () => G.map(g => `<option value="${g.id}">${e(g.cname)} — ${e(g.name)}</option>`).join('');
@@ -79,6 +79,27 @@ ${x.friends.map(f => `<div class=row style="margin-top:8px"><span>${e(f.name)}</
 ${ST.map(s => `<div class=card data-id="${s.id}"><div class=row><div><b>${e(s.full_name)}</b><div class=muted>${e(s.phone)} · ${s.role === 'teacher' ? "O'qituvchi" : 'Menejer'}</div></div><button class=x onclick="del('admin/staff/${s.id}')" aria-label="O'chirish">${ic('x')}</button></div>
 <div style="margin:8px 0">${chk('p' + s.id, (s.perms || '').split(','))}</div><input class=npw placeholder="Yangi parol (ixtiyoriy)"><button class=btn onclick="saveStaff(${s.id})">Saqlash</button></div>`).join('')}`
 };
+let VL = [];
+R.mod = async () => {
+  VL = await api('admin/vocab/levels');
+  return `<h1>Modullar</h1><div class=card><h2>Lug'at bazasi: ${VL.length} daraja</h2><p class=muted style="margin-bottom:8px">Zaxira (.json) faylini tanlang. Darajalar bazaga tushadi; o'zgargan darajalar o'quvchilarda o'zi yangilanadi.</p><input type=file id=vf accept=".json"><button class=btn onclick=importVocab()>Bazaga yuklash</button></div>
+<div class=card><h2>Guruh uchun lug'at moduli</h2><select id=mg onchange=loadMod()><option value="">Guruhni tanlang</option>${gopt()}</select><div id=mb></div></div><div id=mr></div>`;
+};
+async function importVocab() {
+  const f = $('#vf').files[0]; if (!f) return toast('Avval fayl tanlang');
+  try {
+    const d = JSON.parse(await f.text()), tasks = (d.tasks || []).filter(t => t.type === 'quiz' && t.quiz).map(t => ({ id: t.id, title: t.title, difficulty: t.difficulty, quiz: t.quiz }));
+    const r = await api('admin/vocab/import', 'POST', { tasks }); toast(r.count + ' daraja yuklandi'); go(tab);
+  } catch (x) { toast(x.message || 'Fayl xato'); }
+}
+async function loadMod() {
+  const g = v('mg'); if (!g) { $('#mb').innerHTML = ''; $('#mr').innerHTML = ''; return; }
+  const [m, r] = await Promise.all([api('admin/vocab/group/' + g), api('admin/vocab/results?group_id=' + g)]);
+  $('#mb').innerHTML = `<label class=chk style="margin:8px 0"><input type=checkbox id=mo ${m.open ? 'checked' : ''}> Modul shu guruh uchun ochiq</label><div style="max-height:320px;overflow:auto;margin-bottom:8px">${VL.map(l => `<label class=chk><input type=checkbox class=lv value="${l.id}" ${m.level_ids.includes(l.id) ? 'checked' : ''}> ${e(l.title)} <span class=muted>(${l.qcount})</span></label>`).join('')}</div>
+<div class=row><button class="pill sb" onclick="document.querySelectorAll('.lv').forEach(c=>c.checked=true)">Hammasi</button><button class="pill sb" onclick="document.querySelectorAll('.lv').forEach(c=>c.checked=false)">Hech biri</button></div><button class=btn style="margin-top:10px" onclick=saveMod()>Saqlash</button>`;
+  $('#mr').innerHTML = `<h2>So'nggi natijalar</h2>` + (r.map(x => `<div class="card row" style="padding:14px 20px;margin-bottom:8px"><div><b>${e(x.full_name)}</b><div class=muted>${e(x.title)} · ${x.taken}</div></div><b>${x.points}</b></div>`).join('') || `<p class=muted>Natija yo'q.</p>`);
+}
+async function saveMod() { try { await api('admin/vocab/group/' + v('mg'), 'POST', { open: $('#mo').checked, level_ids: checked('.lv') }); toast('Saqlandi'); } catch (x) { toast(x.message); } }
 async function loadAtt() {
   const r = await api(`admin/attendance?group_id=${v('ag')}&date=${v('ad')}`);
   $('#al').innerHTML = r.map(s => `<div class=card data-id="${s.id}"><b>${e(s.full_name)}</b><div class=seg>${[['keldi', 'Keldi'], ['kelmadi', 'Kelmadi'], ['sababli', 'Sababli']].map(([k, l]) => `<button data-v=${k} class="${s.status === k ? 'on ' + k : ''}" onclick="seg(this)">${l}</button>`).join('')}<input type=number class=sc value="${s.score}" min=0 max=100></div></div>`).join('')
