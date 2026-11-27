@@ -1,4 +1,4 @@
-const V = 'miradel-v1', FILES = ['/', '/index.html', '/student.html', '/admin.html', '/theme.css', '/common.js', '/offline.html'];
+const V = 'miradel-v2', FILES = ['/', '/index.html', '/student.html', '/admin.html', '/theme.css', '/common.js', '/offline.html'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(V).then(c => c.addAll(FILES))); self.skipWaiting(); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(k => Promise.all(k.filter(x => x !== V).map(x => caches.delete(x))))); self.clients.claim(); });
 self.addEventListener('fetch', e => {
