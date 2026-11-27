@@ -17,6 +17,7 @@ const IC = {
   user: '<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/>',
   edit: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>',
   grid: '<rect x="4" y="4" width="7" height="7" rx="2"/><rect x="13" y="4" width="7" height="7" rx="2"/><rect x="4" y="13" width="7" height="7" rx="2"/><rect x="13" y="13" width="7" height="7" rx="2"/>',
+  refresh: '<path d="M20 4v5h-5"/><path d="M4 20v-5h5"/><path d="M5.6 9A8 8 0 0119 8.5M18.4 15A8 8 0 015 15.5"/>',
   doc: '<path d="M7 3h7l4 4v14H7z"/><path d="M14 3v4h4M10 12h5M10 16h5"/>'
 };
 const ic = n => `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${IC[n] || ''}</svg>`;
@@ -28,15 +29,28 @@ function setTheme(t) {
 function toggleTheme() { setTheme(document.documentElement.dataset.theme === 'glass' ? 'pastel' : 'glass'); }
 const themeBtn = () => `<button class=ibtn onclick="toggleTheme()" aria-label="Mavzuni almashtirish">${ic('theme')}</button>`;
 try { setTheme(localStorage.getItem('theme') || 'pastel'); } catch { setTheme('pastel'); }
+const _c = new Map(), TTL = 120000;
+// GET javoblar 2 daqiqa xotirada turadi; har bir yozish (POST/PATCH/DELETE) keshni tozalaydi.
+// O'quvchi ma'lumotlari internet bo'lmaganda oxirgi saqlangan nusxadan olinadi.
 async function api(u, m = 'GET', b) {
-  const r = await fetch('/api/' + u, { method: m, headers: { 'Content-Type': 'application/json' }, body: b ? JSON.stringify(b) : undefined });
+  const get = m === 'GET';
+  if (get) { const k = _c.get(u); if (k && Date.now() - k.t < TTL) return k.d; }
+  let r;
+  try { r = await fetch('/api/' + u, { method: m, headers: { 'Content-Type': 'application/json' }, body: b ? JSON.stringify(b) : undefined }); }
+  catch {
+    if (get) { try { const p = JSON.parse(localStorage.getItem('c:' + u)); if (p) return p; } catch { } }
+    throw new Error("Internet yo'q");
+  }
   const d = await r.json().catch(() => ({}));
   if (r.status === 401 && u !== 'login' && u !== 'me') location.href = '/';
   if (!r.ok) throw new Error(d.error || 'Xatolik');
+  if (get) { _c.set(u, { t: Date.now(), d }); if (u.startsWith('student/')) try { localStorage.setItem('c:' + u, JSON.stringify(d)); } catch { } }
+  else _c.clear();
   return d;
 }
 function toast(t) { const d = document.createElement('div'); d.className = 'toast'; d.textContent = t; document.body.append(d); setTimeout(() => d.remove(), 2500); }
-async function out() { await api('logout', 'POST'); location.href = '/'; }
+async function out() { try { await api('logout', 'POST'); } catch { } try { Object.keys(localStorage).filter(k => k.startsWith('c:')).forEach(k => localStorage.removeItem(k)); } catch { } location.href = '/'; }
+const refreshBtn = () => `<button class=ibtn onclick="_c.clear();location.reload()" aria-label="Yangilash">${ic('refresh')}</button>`;
 function nav(T, cur, fn) {
   $('#nav').innerHTML = Object.entries(T).map(([k, v]) => `<button id="n${k}" onclick="${fn}('${k}')" class="${k === cur ? 'on' : ''}">${ic(v[0])}<small>${v[1]}</small></button>`).join('');
 }
