@@ -30,6 +30,9 @@ CREATE TABLE IF NOT EXISTS group_levels(group_id INT REFERENCES study_groups(id)
 CREATE TABLE IF NOT EXISTS vocab_results(id SERIAL PRIMARY KEY, student_id INT REFERENCES users(id) ON DELETE CASCADE, level_id TEXT REFERENCES vocab_levels(id) ON DELETE CASCADE, points INT, correct INT, total INT, seconds INT, taken_at TIMESTAMPTZ DEFAULT now());
 CREATE TABLE IF NOT EXISTS student_vocab(student_id INT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE, custom BOOLEAN DEFAULT false);
 CREATE TABLE IF NOT EXISTS student_levels(student_id INT REFERENCES users(id) ON DELETE CASCADE, level_id TEXT REFERENCES vocab_levels(id) ON DELETE CASCADE, PRIMARY KEY(student_id, level_id));`);
+  await q(`ALTER TABLE courses ADD COLUMN IF NOT EXISTS is_english BOOLEAN DEFAULT false;
+CREATE TABLE IF NOT EXISTS homework(id SERIAL UNIQUE, student_id INT REFERENCES users(id) ON DELETE CASCADE, unit INT, task TEXT, img BYTEA, status TEXT DEFAULT 'submitted', comment TEXT DEFAULT '', submitted_at TIMESTAMPTZ DEFAULT now(), reviewed_by INT, PRIMARY KEY(student_id, unit, task));
+CREATE TABLE IF NOT EXISTS audit_sheets(id SERIAL PRIMARY KEY, group_id INT REFERENCES study_groups(id) ON DELETE CASCADE, week DATE NOT NULL, teacher_id INT REFERENCES users(id) ON DELETE CASCADE, data JSONB NOT NULL DEFAULT '{}', accepted_by INT REFERENCES users(id) ON DELETE SET NULL, accepted_at TIMESTAMPTZ, updated_at TIMESTAMPTZ DEFAULT now(), UNIQUE(group_id, week));`);
   const ph = process.env.ADMIN_PHONE, pw = process.env.ADMIN_PASSWORD;
   if (ph && pw && !(await q("SELECT 1 FROM users WHERE role='admin'")).length)
     await q("INSERT INTO users(role,full_name,phone,password_hash) VALUES('admin','Administrator',$1,$2)", [ph.replace(/\s/g, ''), bcrypt.hashSync(pw, 10)]);
@@ -47,12 +50,12 @@ app.get('/api/me', w(async (req, res) => {
   let t; try { t = jwt.verify(req.cookies.t, SECRET); } catch { return res.status(401).json({ error: 'Kirish talab qilinadi' }); }
   const [u] = await q('SELECT role, full_name, perms FROM users WHERE id=$1', [t.id]);
   if (!u) return res.status(401).json({ error: 'Kirish talab qilinadi' });
-  res.json({ role: u.role, name: u.full_name, perms: u.role === 'admin' ? ALL : (u.perms || '').split(',').filter(Boolean) });
+  res.json({ id: t.id, role: u.role, name: u.full_name, perms: u.role === 'admin' ? ALL : (u.perms || '').split(',').filter(Boolean) });
 }));
 app.post('/api/logout', (req, res) => { res.clearCookie('t'); res.json({ ok: 1 }); });
 
 // ---- Admin
-const ALL = ['groups', 'students', 'payments', 'attendance', 'announcements', 'referrals', 'reports', 'report_send'];
+const ALL = ['groups', 'students', 'payments', 'attendance', 'announcements', 'referrals', 'reports', 'report_send', 'homework'];
 const NEED = [
   ['GET', /^\/stats$/, ['students', 'payments']],
   ['GET', /^\/(courses|groups)$/, ['groups', 'students', 'attendance', 'announcements']],
@@ -63,7 +66,8 @@ const NEED = [
   [null, /^\/attendance/, ['attendance']],
   [null, /^\/announcements/, ['announcements']],
   [null, /^\/referrals/, ['referrals']],
-  [null, /^\/reports/, ['reports', 'report_send']]
+  [null, /^\/reports/, ['reports', 'report_send']],
+  [null, /^\/homework/, ['homework']]
 ];
 const A = async (req, res, next) => {
   try {
@@ -99,7 +103,7 @@ app.patch('/api/admin/staff/:id', A, adminOnly, w(async (req, res) => {
 app.delete('/api/admin/staff/:id', A, adminOnly, w(async (req, res) => { await q("DELETE FROM users WHERE id=$1 AND role IN ('teacher','manager')", [req.params.id]); res.json({ ok: 1 }); }));
 
 // Guruhlar: o'qituvchi faqat o'zinikini ko'radi; admin o'qituvchi biriktiradi
-app.get('/api/admin/groups', A, w(async (req, res) => res.json(await q(`SELECT g.*, c.name cname, t.full_name tname FROM study_groups g JOIN courses c ON c.id=g.course_id
+app.get('/api/admin/groups', A, w(async (req, res) => res.json(await q(`SELECT g.*, c.name cname, COALESCE(c.is_english,false) english, t.full_name tname FROM study_groups g JOIN courses c ON c.id=g.course_id
   LEFT JOIN users t ON t.id=g.teacher_id WHERE ($1::int IS NULL OR g.teacher_id=$1) ORDER BY c.name, g.name`, [req.u.role === 'teacher' ? req.u.id : null]))));
 app.patch('/api/admin/groups/:id', A, adminOnly, w(async (req, res) => { await q('UPDATE study_groups SET teacher_id=$1 WHERE id=$2', [req.body.teacher_id || null, req.params.id]); res.json({ ok: 1 }); }));
 
@@ -230,9 +234,9 @@ app.get('/api/admin/referrals', A, w(async (req, res) => res.json(await q(`SELEC
 const S = auth('student');
 app.get('/api/student/home', S, w(async (req, res) => {
   const id = req.u.id;
-  const [me] = await q(`SELECT u.full_name, u.promo_code, s.group_id, g.name gname, s.monthly_fee,
+  const [me] = await q(`SELECT u.full_name, u.promo_code, s.group_id, g.name gname, COALESCE(c.is_english,false) english, s.monthly_fee,
     (NOT s.paid OR s.next_payment<CURRENT_DATE) debt, to_char(s.next_payment,'YYYY-MM-DD') next_payment
-    FROM users u JOIN students s ON s.user_id=u.id LEFT JOIN study_groups g ON g.id=s.group_id WHERE u.id=$1`, [id]);
+    FROM users u JOIN students s ON s.user_id=u.id LEFT JOIN study_groups g ON g.id=s.group_id LEFT JOIN courses c ON c.id=g.course_id WHERE u.id=$1`, [id]);
   const att = await q("SELECT to_char(day,'YYYY-MM-DD') AS day, status, score FROM attendance WHERE student_id=$1 ORDER BY day DESC LIMIT 90", [id]);
   const [{ c }] = await q('SELECT count(*)::int c FROM users WHERE referred_by=$1', [id]);
   const news = await q("SELECT title, body, kind, to_char(created_at,'YYYY-MM-DD') d FROM announcements WHERE group_id IS NULL OR group_id=$1 ORDER BY created_at DESC LIMIT 30", [me.group_id]);
@@ -325,6 +329,80 @@ app.post('/api/student/vocab/results', S, w(async (req, res) => {
   }
   res.json({ ok: 1, saved: n });
 }));
+
+// ---- Ingliz tili kursi: darslik uyga vazifasi (rasm) va o'qituvchi hisobot varag'i
+const isEnglish = async gid => { const [g] = await q('SELECT g.id, g.name, g.schedule, COALESCE(c.is_english,false) english FROM study_groups g JOIN courses c ON c.id=g.course_id WHERE g.id=$1', [gid]); return g && g.english ? g : null; };
+const attc = a => `CASE ${a}.status WHEN 'keldi' THEN '+' WHEN 'kelmadi' THEN '-' WHEN 'sababli' THEN '-' ELSE '' END`;
+app.patch('/api/admin/courses/:id', A, adminOnly, w(async (req, res) => { await q('UPDATE courses SET is_english=$1 WHERE id=$2', [!!req.body.is_english, req.params.id]); res.json({ ok: 1 }); }));
+
+app.get('/api/admin/reports/audit', A, w(async (req, res) => {
+  const { group_id, week } = req.query;
+  if (!group_id || !week) return res.status(400).json({ error: 'Guruh va sana kerak' });
+  if (!(await okGroup(req.u, group_id))) return res.status(403).json({ error: 'Bu guruh sizniki emas' });
+  const group = await isEnglish(group_id);
+  if (!group) return res.status(400).json({ error: 'Bu guruh ingliz tili kursiga tegishli emas' });
+  const [sheet] = await q(`SELECT a.id, a.teacher_id, t.full_name teacher, a.data, a.accepted_by, (SELECT full_name FROM users WHERE id=a.accepted_by) accepted_name,
+    to_char(a.accepted_at,'YYYY-MM-DD HH24:MI') AS accepted_at FROM audit_sheets a JOIN users t ON t.id=a.teacher_id WHERE a.group_id=$1 AND a.week=$2`, [group_id, week]);
+  const students = await q(`SELECT u.id, u.full_name, ${attc('a1')} sat, ${attc('a2')} sun FROM students s JOIN users u ON u.id=s.user_id
+    LEFT JOIN attendance a1 ON a1.student_id=u.id AND a1.day=$2::date LEFT JOIN attendance a2 ON a2.student_id=u.id AND a2.day=$2::date+1
+    WHERE s.group_id=$1 ORDER BY u.full_name`, [group_id, week]);
+  res.json({ group, sheet: sheet || null, students });
+}));
+app.post('/api/admin/reports/audit', A, w(async (req, res) => {
+  if (!req.u.perms.includes('report_send')) return res.status(403).json({ error: "Ruxsat yo'q" });
+  const { group_id, week, data } = req.body;
+  if (!group_id || !week || !data) return res.status(400).json({ error: "Ma'lumot to'liq emas" });
+  if (!(await okGroup(req.u, group_id))) return res.status(403).json({ error: 'Bu guruh sizniki emas' });
+  if (!(await isEnglish(group_id))) return res.status(400).json({ error: 'Bu guruh ingliz tili kursiga tegishli emas' });
+  const [ex] = await q('SELECT teacher_id FROM audit_sheets WHERE group_id=$1 AND week=$2', [group_id, week]);
+  if (ex && ex.teacher_id !== req.u.id && req.u.role !== 'admin') return res.status(403).json({ error: "Bu varaq boshqa o'qituvchiniki" });
+  await q(`INSERT INTO audit_sheets(group_id,week,teacher_id,data) VALUES($1,$2,$3,$4::jsonb)
+    ON CONFLICT(group_id,week) DO UPDATE SET data=$4::jsonb, updated_at=now(), accepted_by=NULL, accepted_at=NULL`, [group_id, week, req.u.id, JSON.stringify(data)]);
+  res.json({ ok: 1 });
+}));
+app.get('/api/admin/reports/audit/list', A, w(async (req, res) => res.json(await q(`SELECT a.id, a.group_id, to_char(a.week,'YYYY-MM-DD') AS week, g.name gname, t.full_name teacher, a.accepted_by IS NOT NULL accepted
+  FROM audit_sheets a JOIN study_groups g ON g.id=a.group_id JOIN users t ON t.id=a.teacher_id WHERE ($1::int IS NULL OR a.teacher_id=$1)
+  ORDER BY a.week DESC, a.updated_at DESC LIMIT 50`, [req.u.perms.includes('reports') ? null : req.u.id]))));
+app.patch('/api/admin/reports/audit/:id/accept', A, w(async (req, res) => {
+  if (!req.u.perms.includes('reports')) return res.status(403).json({ error: "Ruxsat yo'q" });
+  await q('UPDATE audit_sheets SET accepted_by=$1, accepted_at=now() WHERE id=$2', [req.u.id, req.params.id]); res.json({ ok: 1 });
+}));
+
+app.get('/api/admin/homework', A, w(async (req, res) => {
+  const { group_id, unit, status } = req.query;
+  if (group_id && !(await okGroup(req.u, group_id))) return res.status(403).json({ error: 'Bu guruh sizniki emas' });
+  res.json(await q(`SELECT h.id, u.full_name, h.unit, h.task, h.status, h.comment, to_char(h.submitted_at,'YYYY-MM-DD HH24:MI') AS at, (h.img IS NOT NULL) has_img
+    FROM homework h JOIN users u ON u.id=h.student_id JOIN students s ON s.user_id=u.id JOIN study_groups g ON g.id=s.group_id
+    WHERE ($1::int IS NULL OR s.group_id=$1) AND ($2::int IS NULL OR h.unit=$2) AND ($3::text IS NULL OR h.status=$3) AND ($4::int IS NULL OR g.teacher_id=$4)
+    ORDER BY (h.status='submitted') DESC, h.submitted_at DESC LIMIT 100`, [group_id || null, unit || null, status || null, req.u.role === 'teacher' ? req.u.id : null]));
+}));
+app.get('/api/admin/homework/:id/img', A, w(async (req, res) => {
+  const [h] = await q('SELECT h.img FROM homework h JOIN students s ON s.user_id=h.student_id JOIN study_groups g ON g.id=s.group_id WHERE h.id=$1 AND ($2::int IS NULL OR g.teacher_id=$2)', [req.params.id, req.u.role === 'teacher' ? req.u.id : null]);
+  if (!h || !h.img) return res.status(404).json({ error: "Rasm topilmadi yoki muddati o'tgan" });
+  res.set('Content-Type', 'image/jpeg'); res.set('Cache-Control', 'private, max-age=3600'); res.send(h.img);
+}));
+app.patch('/api/admin/homework/:id', A, w(async (req, res) => {
+  const { status, comment } = req.body;
+  if (!['accepted', 'redo'].includes(status)) return res.status(400).json({ error: 'Holat noto\'g\'ri' });
+  await q(`UPDATE homework SET status=$1, comment=$2, reviewed_by=$3 FROM students s JOIN study_groups g ON g.id=s.group_id
+    WHERE homework.id=$4 AND s.user_id=homework.student_id AND ($5::int IS NULL OR g.teacher_id=$5)`, [status, String(comment || '').slice(0, 300), req.u.id, req.params.id, req.u.role === 'teacher' ? req.u.id : null]);
+  res.json({ ok: 1 });
+}));
+
+app.get('/api/student/homework', S, w(async (req, res) => res.json(await q("SELECT unit, task, status, comment, to_char(submitted_at,'YYYY-MM-DD HH24:MI') AS at FROM homework WHERE student_id=$1", [req.u.id]))));
+app.post('/api/student/homework/:unit/:task', S, express.raw({ type: 'image/jpeg', limit: '1mb' }), w(async (req, res) => {
+  const unit = parseInt(req.params.unit), task = req.params.task;
+  if (!(unit >= 1 && unit <= 10) || !/^[ABCD]$/.test(task)) return res.status(400).json({ error: 'Topshiriq noto\'g\'ri' });
+  const [g] = await q('SELECT s.group_id FROM students s WHERE s.user_id=$1', [req.u.id]);
+  if (!g || !(await isEnglish(g.group_id))) return res.status(403).json({ error: 'Bu bo\'lim ingliz tili guruhlari uchun' });
+  if (!Buffer.isBuffer(req.body) || req.body.length < 1000) return res.status(400).json({ error: 'Rasm kelmadi' });
+  await q(`INSERT INTO homework(student_id,unit,task,img,status,comment,submitted_at) VALUES($1,$2,$3,$4,'submitted','',now())
+    ON CONFLICT(student_id,unit,task) DO UPDATE SET img=$4, status='submitted', comment='', submitted_at=now(), reviewed_by=NULL`, [req.u.id, unit, task, req.body]);
+  res.json({ ok: 1 });
+}));
+// Joy tejash: 60 kundan eski vazifa rasmlari o'chiriladi (holat va izoh qoladi)
+const purge = () => q("UPDATE homework SET img=NULL WHERE img IS NOT NULL AND submitted_at < now() - interval '60 days'").catch(() => { });
+setInterval(purge, 6 * 36e5); setTimeout(purge, 30000);
 
 const PORT = process.env.PORT || 3000;
 init().then(() => app.listen(PORT, () => console.log('Miradel ishga tushdi:', PORT))).catch(e => { console.error(e); process.exit(1); });
